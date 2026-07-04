@@ -1,0 +1,26 @@
+# MT5 broker adapter configuration.
+# Login credentials are read from the environment variables NAMED below (login_env,
+# password_env, server_env) -- default to MT5_LOGIN/MT5_PASSWORD/MT5_SERVER in .env.
+# The secrets themselves never live in this file.
+#
+# Before setting allow_live_trading: true, work through the README's safety checklist --
+# in particular, verify the MT5 terminal is logged into a DEMO account (MT5Broker does
+# not check this for you).
+
+symbol: "EURUSD"
+magic: 987001
+lot: 0.01                     # fixed order size in lots; risk-based sizing is future work
+deviation: 20                 # max acceptable slippage in points
+max_spread_points: 30         # skip trading if the current spread exceeds this many points
+timeout_ms: 10000
+filling_type: "IOC"           # IOC | FOK | RETURN -- adapter falls back through the others automatically
+order_comment: "trend_only_scalper"
+
+# Safety: real orders are blocked (simulated locally against real market data instead)
+# until this is explicitly set to true. Never enable against a live/funded account.
+allow_live_trading: false
+
+login_env: "MT5_LOGIN"
+password_env: "MT5_PASSWORD"
+server_env: "MT5_SERVER"
+terminal_path_optional:        # e.g. "C:/Program Files/MetaTrader 5/terminal64.exe"

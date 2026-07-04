@@ -1,0 +1,62 @@
+# Trend-only scalper strategy configuration.
+# All cash values are quote-currency (USD) amounts, not percentages.
+#
+# This file is validated at load time (see StrategyConfig in src/trend_only_scalper/
+# config.py) and will refuse to load if one_position_only is false, any allow_* anti-
+# pattern flag is true, or a risk value is unsafe (daily_max_loss >= 0, max_trades_per_day
+# <= 0, tp_cash <= 0, breakeven_trigger_cash <= 0, swing_lookback < 1, sl_atr_buffer < 0).
+# See the README's safety checklist before enabling any real demo order.
+
+symbol: "EURUSD"
+account_mode: "demo"          # demo | live -- live order placement is additionally gated
+                               # per-broker by mt5.yaml/binance.yaml's allow_live_trading
+
+trend_timeframe: "M15"
+confirm_timeframe: "M5"
+entry_timeframe: "M1"
+
+# Indicators
+ema_fast: 20
+ema_slow: 50
+macd_fast: 12
+macd_slow: 26
+macd_signal: 9
+atr_period: 14
+
+# Entry conditions
+pullback_atr_tolerance: 0.25       # M1 price must be within this many ATR of EMA20/VWAP
+abnormal_candle_atr_multiple: 2.0  # reject M1 candles with range > ATR(14) * this multiple
+min_atr_spread_multiple: 3.0       # require ATR(14) >= spread * this multiple
+
+# Stop-loss sizing
+swing_lookback: 20      # bars to look back for the swing low/high used as the SL anchor
+sl_atr_buffer: 0.5      # extra ATR multiples added beyond the swing point
+
+# MVP fixed order size; risk-based position sizing from stop distance is future work.
+default_quantity: 1.0
+
+# Position management (cash-based, per position)
+tp_cash: 1.50
+breakeven_trigger_cash: 0.70
+breakeven_lock_cash: 0.05
+
+# Daily risk guard
+daily_profit_target: 200.0
+daily_max_loss: -30.0
+max_consecutive_losses: 3
+max_trades_per_day: 150
+
+# Cooldown, measured in M1 bars
+cooldown_after_tp_bars: 1
+cooldown_after_be_bars: 2
+cooldown_after_sl_bars: 5
+
+# Anti-pattern guards -- must never be overridden to true in this project
+one_position_only: true
+allow_counter_trend: false
+allow_grid: false
+allow_martingale: false
+allow_averaging_down: false
+
+# Safety
+dry_run: true

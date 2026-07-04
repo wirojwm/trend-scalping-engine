@@ -1,0 +1,25 @@
+# Binance broker adapter configuration (ccxt).
+# API credentials are read from the environment variables NAMED below (api_key_env,
+# api_secret_env) -- default to BINANCE_API_KEY/BINANCE_API_SECRET in .env.
+# The secrets themselves never live in this file.
+#
+# Before setting allow_live_trading: true, work through the README's safety checklist --
+# in particular, keep testnet: true unless you specifically intend to trade mainnet.
+
+symbol: "BTC/USDT"
+market_type: "futures"        # futures | spot -- short selling requires "futures"
+testnet: true                 # must be true until explicitly promoted to live trading
+dry_run: true
+
+# Safety: real orders are blocked (simulated locally against real market data instead)
+# until this is explicitly set to true. Prefer testnet even when enabling this.
+allow_live_trading: false
+
+api_key_env: "BINANCE_API_KEY"
+api_secret_env: "BINANCE_API_SECRET"
+
+leverage: 2
+quantity: 0.001                  # fixed order size in base-asset units (e.g. BTC)
+max_cost_ratio_to_tp: 0.5        # warn if estimated round-trip fee exceeds this fraction of tp_cash
+fee_rate_estimate: 0.0004        # taker fee rate per side, e.g. 0.04%
+recv_window: 5000                # Binance API recvWindow, in milliseconds

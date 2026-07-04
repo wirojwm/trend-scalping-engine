@@ -1,0 +1,138 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.cache/
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+
+# API / credential files
+credentials.json
+secrets.json
+api_keys.json
+token.json
+tokens.json
+
+# =========================
+# IDE / editor
+# =========================
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+log/
+
+# =========================
+# Trading bot outputs
+# =========================
+journals/
+journal/
+trade_journal.csv
+decision_log.csv
+orders.csv
+fills.csv
+positions.csv
+metrics.csv
+reports/
+
+# =========================
+# Backtest / market data
+# =========================
+# "data/" (not "data/") so the negation below can still re-include the checked-in sample
+# fixture -- a directory-matching pattern would prune the whole folder from traversal and
+# no !exception could reach inside it.
+data/*
+datasets/
+historical_data/
+backtest_data/
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.sqlite
+*.db
+
+# ถ้าต้องการเก็บ sample data ขนาดเล็ก ให้ใช้ folder นี้แทน
+!data_sample/
+!data_sample/**
+
+# Sample OHLCV fixture used by the replay backtest CLI/tests -- small, synthetic, meant
+# to be checked in (unlike real historical market data dumps, which stay ignored above).
+!data/sample_m1.csv
+
+# =========================
+# MT5 / broker sensitive files
+# =========================
+mt5_login.json
+mt5_account.json
+broker_config.local.yaml
+config/*.local.yaml
+config/*secret*.yaml
+config/*private*.yaml
+
+# =========================
+# Binance / exchange sensitive files
+# =========================
+binance_keys.json
+exchange_keys.json
+ccxt_config.local.json
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Build / packaging
+# =========================
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
