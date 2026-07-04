@@ -1,0 +1,23 @@
+# Backtest replay configuration -- replays historical M1 OHLCV bars through the same
+# broker-agnostic strategy loop used by dry-run/demo, producing a trade journal + metrics.
+#
+# This is a lightweight sanity-check replay, not a professional backtesting engine: bar
+# resolution only (no tick data), a single simulated position, and the simplifications
+# documented in src/trend_only_scalper/backtest/simulated_broker.py.
+
+input_csv: "data/sample_m1.csv"
+symbol: "EURUSD"
+
+initial_equity: 10000.0
+
+# Cost simulation (price units unless noted)
+spread_points_or_price: 0.0001
+fee_rate: 0.0                    # fraction of notional per side; 0 for spread-only instruments
+slippage_points_or_price: 0.0
+
+execution_mode: "next_open"      # new entries fill at the next M1 bar's open price
+
+start_date:                      # e.g. "2026-01-01" -- optional, defaults to all available data
+end_date:                        # e.g. "2026-01-31"
+
+output_journal_csv: "logs/backtest_journal.csv"
