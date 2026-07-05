@@ -205,6 +205,12 @@ class OpenTradeContext:
 
     Kept around across iterations (position management doesn't recompute trend/signal)
     so the trade journal can record entry-time context when the position later closes.
+
+    `breakeven_applied` tracks this independently of the `Position` object itself: a live
+    broker (MT5/Binance with allow_live_trading=True) rebuilds a fresh `Position` from the
+    broker's own data on every `get_open_position()` call, so a flag set directly on that
+    object would not survive to the next iteration -- `LoopState.open_trade_context` is the
+    one thing that reliably persists across iterations regardless of broker.
     """
 
     timeframe_entry: str
@@ -213,6 +219,7 @@ class OpenTradeContext:
     m15_trend: str
     m5_confirmation: str
     m1_signal: str
+    breakeven_applied: bool = False
 
 
 @dataclass

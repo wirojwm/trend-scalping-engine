@@ -238,6 +238,53 @@ def test_run_iteration_detects_broker_initiated_close_and_records_hard_sl(tmp_pa
     assert state.open_trade_context is None
 
 
+def test_run_iteration_detects_broker_initiated_close_after_breakeven_and_records_breakeven_sl(tmp_path):
+    """If the broker's own stop-loss fires AFTER manage_position() already moved it to
+    breakeven, the order that fired IS that (moved) breakeven stop -- the autonomous-close
+    path must record BREAKEVEN_SL (and start the breakeven cooldown), not HARD_SL.
+    """
+    cfg, broker = buy_ready_broker()
+    state = make_state()
+    journal_path = tmp_path / "journal.csv"
+
+    run_iteration(broker, cfg, STRATEGY_ID, state, journal_path=str(journal_path))
+    position = broker.get_open_position(cfg.symbol, STRATEGY_ID)
+    assert position is not None
+
+    # Bump price into breakeven-trigger range (between breakeven_trigger_cash and tp_cash).
+    be_price = position.entry_price + 1.0
+    m1 = broker.get_bars(cfg.symbol, "M1", 1000)
+    bumped = pd.concat(
+        [
+            m1,
+            pd.DataFrame(
+                [
+                    {
+                        "time": m1["time"].iloc[-1] + pd.Timedelta(minutes=1),
+                        "open": position.entry_price, "high": be_price + 0.1,
+                        "low": position.entry_price - 0.1, "close": be_price, "volume": 100.0,
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    broker.set_bars("M1", bumped)
+
+    run_iteration(broker, cfg, STRATEGY_ID, state, journal_path=str(journal_path))
+    assert state.open_trade_context.breakeven_applied is True
+
+    # Simulate the (now breakeven-moved) stop firing server-side, bypassing run_iteration().
+    broker.close_position(position.position_id, CloseReason.HARD_SL)
+    assert broker.get_position_count(cfg.symbol, STRATEGY_ID) == 0
+
+    run_iteration(broker, cfg, STRATEGY_ID, state, journal_path=str(journal_path))
+
+    rows = read_journal_rows(str(journal_path))
+    assert rows[-1]["reason_close"] == "BREAKEVEN_SL"
+    assert state.cooldown.bars_remaining == cfg.cooldown_after_be_bars
+
+
 def test_broker_initiated_close_does_not_double_count_a_close_we_decided_ourselves():
     """A normal TP close (decided by manage_position(), closed via run_iteration() itself)
     must clear last_known_position so the NEXT call doesn't also treat it as an

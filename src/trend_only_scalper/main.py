@@ -19,6 +19,7 @@ import argparse
 import logging
 import signal
 import time
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from types import FrameType
@@ -299,19 +300,25 @@ def run_iteration(
         # trade/loss counter update -- letting the bot re-enter immediately next bar.
         vanished = state.last_known_position
         realized_pnl = state.daily_stats.realized_pnl_cash - previous_realized_pnl_cash
-        autonomous_result = TradeResult(action=PositionAction.CLOSE, close_reason=CloseReason.HARD_SL)
-        _record_closed_trade(state, CloseReason.HARD_SL, realized_pnl, cfg)
+        # If we'd already moved the stop to breakeven before it vanished, the order that
+        # fired IS that (moved) stop -- a breakeven-locked close, not the original hard SL.
+        context = state.open_trade_context
+        close_reason = (
+            CloseReason.BREAKEVEN_SL if context and context.breakeven_applied else CloseReason.HARD_SL
+        )
+        autonomous_result = TradeResult(action=PositionAction.CLOSE, close_reason=close_reason)
+        _record_closed_trade(state, close_reason, realized_pnl, cfg)
         loop_logger.warning(
-            "position=%s vanished without an explicit close (broker-side hard stop-loss "
-            "assumed) -- recording HARD_SL pnl=%.4f cooldown_bars=%d",
-            vanished.position_id, realized_pnl, state.cooldown.bars_remaining,
+            "position=%s vanished without an explicit close (broker-side %s assumed) -- "
+            "recording pnl=%.4f cooldown_bars=%d",
+            vanished.position_id, close_reason.value, realized_pnl, state.cooldown.bars_remaining,
         )
         _write_trade_journal_row(
             journal_path, broker, strategy_id, cfg, state, vanished, autonomous_result, realized_pnl
         )
         state.open_trade_context = None
         state.last_known_position = None
-        decision["action_taken"] = "autonomous_close_hard_sl"
+        decision["action_taken"] = f"autonomous_close_{close_reason.value.lower()}"
         decision["no_trade_reason"] = "position_closed_by_broker"
         # Return now, exactly like a manage_position()-decided close does -- the cooldown
         # this just started should count down starting next call, not lose a bar to the
@@ -353,6 +360,8 @@ def run_iteration(
             loop_logger.info(
                 "modified stop loss position=%s new_sl=%.5f", position.position_id, result.new_stop_loss
             )
+            if state.open_trade_context is not None:
+                state.open_trade_context = replace(state.open_trade_context, breakeven_applied=True)
             decision["action_taken"] = "manage_modify_sl"
         else:
             decision["action_taken"] = "manage_none"
