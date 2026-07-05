@@ -115,8 +115,14 @@ def calculate_metrics(rows: list[dict]) -> Metrics:
     )
 
 
-def build_safety_report(cfg: StrategyConfig, backend: str) -> str:
-    """A human-readable summary of the anti-pattern guards and risk limits in effect."""
+def build_safety_report(cfg: StrategyConfig, backend: str, allow_live_trading: bool | None = None) -> str:
+    """A human-readable summary of the anti-pattern guards and risk limits in effect.
+
+    `allow_live_trading` is the broker-config flag (MT5Config/BinanceConfig) that actually
+    gates whether real orders can be sent -- pass it for mt5/binance backends so an operator
+    can't misjudge live-trading status from this report alone. Left `None` for mock/backtest,
+    which have no live-trading concept.
+    """
     lines = [
         "=== Safety Report ===",
         f"one_position_only:      {cfg.one_position_only}",
@@ -129,10 +135,12 @@ def build_safety_report(cfg: StrategyConfig, backend: str) -> str:
         f"max_consecutive_losses:  {cfg.max_consecutive_losses}",
         f"max_trades_per_day:      {cfg.max_trades_per_day}",
         f"broker_backend:          {backend}",
-        "======================",
     ]
+    if allow_live_trading is not None:
+        lines.append(f"allow_live_trading:      {allow_live_trading}")
+    lines.append("======================")
     return "\n".join(lines)
 
 
-def print_safety_report(cfg: StrategyConfig, backend: str) -> None:
-    print(build_safety_report(cfg, backend))
+def print_safety_report(cfg: StrategyConfig, backend: str, allow_live_trading: bool | None = None) -> None:
+    print(build_safety_report(cfg, backend, allow_live_trading))

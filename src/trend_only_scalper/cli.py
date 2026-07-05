@@ -207,7 +207,7 @@ def cmd_mt5_demo(args: argparse.Namespace) -> int:
     strategy_cfg = load_strategy_config(args.strategy)
     mt5_cfg = load_mt5_config(args.broker, env=env)
 
-    print_safety_report(strategy_cfg, backend="mt5")
+    print_safety_report(strategy_cfg, backend="mt5", allow_live_trading=mt5_cfg.allow_live_trading)
     if mt5_cfg.allow_live_trading:
         print(
             "\n*** allow_live_trading is TRUE -- REAL ORDERS WILL BE SENT to the connected "
@@ -236,7 +236,7 @@ def cmd_binance_demo(args: argparse.Namespace) -> int:
     strategy_cfg = load_strategy_config(args.strategy)
     binance_cfg = load_binance_config(args.broker, env=env)
 
-    print_safety_report(strategy_cfg, backend="binance")
+    print_safety_report(strategy_cfg, backend="binance", allow_live_trading=binance_cfg.allow_live_trading)
     print(f"testnet: {binance_cfg.testnet}   market_type: {binance_cfg.market_type}")
     if binance_cfg.allow_live_trading:
         print(
@@ -257,9 +257,24 @@ def cmd_binance_demo(args: argparse.Namespace) -> int:
 
 
 def cmd_safety_report(args: argparse.Namespace) -> int:
-    """Print the current strategy.yaml's safety settings (anti-pattern guards, risk limits)."""
+    """Print the current strategy.yaml's safety settings (anti-pattern guards, risk limits).
+
+    For --backend mt5/binance, also loads that broker's config so the report shows
+    allow_live_trading -- the flag that actually gates whether real orders can be sent.
+    """
     strategy_cfg = load_strategy_config(args.strategy)
-    print_safety_report(strategy_cfg, backend=args.backend)
+
+    allow_live_trading: bool | None = None
+    if args.backend == "mt5":
+        env = load_env(args.env_file)
+        mt5_cfg = load_mt5_config(args.broker or "config/mt5.yaml", env=env)
+        allow_live_trading = mt5_cfg.allow_live_trading
+    elif args.backend == "binance":
+        env = load_env(args.env_file)
+        binance_cfg = load_binance_config(args.broker or "config/binance.yaml", env=env)
+        allow_live_trading = binance_cfg.allow_live_trading
+
+    print_safety_report(strategy_cfg, backend=args.backend, allow_live_trading=allow_live_trading)
     return 0
 
 
@@ -311,6 +326,12 @@ def build_parser() -> argparse.ArgumentParser:
     safety_report = subparsers.add_parser("safety-report", help="Print the current config's safety settings")
     safety_report.add_argument("--strategy", default="config/strategy.yaml", help="Path to strategy.yaml")
     safety_report.add_argument("--backend", default="mock", choices=["mock", "mt5", "binance", "backtest"])
+    safety_report.add_argument(
+        "--broker", default=None,
+        help="Path to mt5.yaml/binance.yaml (only used when --backend is mt5/binance; "
+        "defaults to config/mt5.yaml or config/binance.yaml)",
+    )
+    safety_report.add_argument("--env-file", default=".env")
     safety_report.set_defaults(func=cmd_safety_report)
 
     return parser

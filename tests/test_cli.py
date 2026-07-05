@@ -71,6 +71,29 @@ def test_cli_safety_report_runs(capsys):
     assert "one_position_only" in out
     assert "daily_max_loss" in out
     assert "broker_backend" in out
+    assert "allow_live_trading" not in out  # mock backend has no live-trading concept
+
+
+def test_cli_safety_report_shows_allow_live_trading_for_mt5(capsys):
+    args = cli.build_parser().parse_args(
+        [
+            "safety-report", "--strategy", "config/strategy.yaml", "--backend", "mt5",
+            "--broker", "config/mt5.yaml", "--env-file", ".env.missing",
+        ]
+    )
+    assert cli.cmd_safety_report(args) == 0
+    assert "allow_live_trading:      False" in capsys.readouterr().out
+
+
+def test_cli_safety_report_shows_allow_live_trading_for_binance(capsys):
+    args = cli.build_parser().parse_args(
+        [
+            "safety-report", "--strategy", "config/strategy.yaml", "--backend", "binance",
+            "--broker", "config/binance.yaml", "--env-file", ".env.missing",
+        ]
+    )
+    assert cli.cmd_safety_report(args) == 0
+    assert "allow_live_trading:      False" in capsys.readouterr().out
 
 
 # --- dangerous config rejected / safe config accepted ----------------------

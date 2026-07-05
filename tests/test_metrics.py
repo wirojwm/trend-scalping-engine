@@ -146,3 +146,21 @@ def test_safety_report_reflects_config_values():
     assert "-50.0" in report
     assert "42" in report
     assert "mt5" in report
+
+
+def test_safety_report_omits_allow_live_trading_when_not_applicable():
+    cfg = StrategyConfig(symbol="EURUSD")
+    report = build_safety_report(cfg, backend="mock")
+    assert "allow_live_trading" not in report
+
+
+def test_safety_report_shows_allow_live_trading_true():
+    cfg = StrategyConfig(symbol="EURUSD")
+    report = build_safety_report(cfg, backend="mt5", allow_live_trading=True)
+    assert "allow_live_trading:      True" in report
+
+
+def test_safety_report_shows_allow_live_trading_false():
+    cfg = StrategyConfig(symbol="EURUSD")
+    report = build_safety_report(cfg, backend="binance", allow_live_trading=False)
+    assert "allow_live_trading:      False" in report
