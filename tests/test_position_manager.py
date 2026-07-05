@@ -142,6 +142,39 @@ def test_should_scan_for_entry_false_when_position_open():
 # --- Cooldown never blocks position management -----------------------------
 
 
+# --- Non-linear contract size (e.g. MT5 lots) ------------------------------
+
+
+def test_breakeven_lock_distance_scales_with_contract_size():
+    # MT5-style lot: quantity=0.1 lots, contract_size=100000 units/lot -> cash-per-price-unit
+    # is quantity * contract_size = 10000, not quantity alone.
+    position = make_position(Side.BUY, entry_price=1.1000, stop_loss=1.0950, quantity=0.1)
+    result = manage_position(
+        position,
+        unrealized_pnl_cash=0.70,
+        tp_cash=1.50,
+        breakeven_trigger_cash=0.70,
+        breakeven_lock_cash=50.0,
+        contract_size=100_000.0,
+    )
+    assert result.action is PositionAction.MODIFY_SL
+    # lock_distance = 50.0 / (0.1 * 100000) = 0.005
+    assert result.new_stop_loss == pytest.approx(1.1000 + 0.005)
+
+
+def test_manage_position_default_contract_size_matches_linear_instruments():
+    # contract_size defaults to 1.0, so behavior for Binance/Mock (linear) is unchanged.
+    position = make_position(Side.BUY, entry_price=1.1000, stop_loss=1.0950, quantity=1.0)
+    result = manage_position(
+        position,
+        unrealized_pnl_cash=0.70,
+        tp_cash=1.50,
+        breakeven_trigger_cash=0.70,
+        breakeven_lock_cash=0.05,
+    )
+    assert result.new_stop_loss == pytest.approx(1.1000 + 0.05)
+
+
 def test_active_cooldown_does_not_affect_manage_position_outcome():
     position = make_position(Side.BUY, entry_price=1.1000, stop_loss=1.0950)
     cooldown = start_cooldown(5)

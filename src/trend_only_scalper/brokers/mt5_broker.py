@@ -131,6 +131,12 @@ class MT5Broker(Broker):
         normalized = min(max(normalized, info.volume_min), info.volume_max)
         return round(normalized, _decimal_places(step))
 
+    def contract_size(self, symbol: str) -> float:
+        """MT5 quantity is in lots, not raw units -- cash-per-price-unit per lot is the
+        symbol's trade_contract_size (e.g. 100000 for standard FX lots), never 1.0.
+        """
+        return self._symbol_info(symbol).trade_contract_size
+
     # --- bars ------------------------------------------------------------------
 
     def get_bars(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
@@ -348,7 +354,11 @@ class MT5Broker(Broker):
         if not self.allow_live_trading:
             latest_price = self._simulated_latest_price(position.symbol)
             move = latest_price - position.entry_price
-            return (move if position.side is Side.BUY else -move) * position.quantity
+            return (
+                (move if position.side is Side.BUY else -move)
+                * position.quantity
+                * self.contract_size(position.symbol)
+            )
 
         positions = self._mt5.positions_get(ticket=int(position.position_id)) or ()
         if not positions:

@@ -21,11 +21,14 @@ MAGIC = 987001
 
 
 class FakeSymbolInfo:
-    def __init__(self, digits=5, volume_min=0.01, volume_step=0.01, volume_max=100.0):
+    def __init__(
+        self, digits=5, volume_min=0.01, volume_step=0.01, volume_max=100.0, trade_contract_size=1.0
+    ):
         self.digits = digits
         self.volume_min = volume_min
         self.volume_step = volume_step
         self.volume_max = volume_max
+        self.trade_contract_size = trade_contract_size
 
 
 class FakePosition:
@@ -326,3 +329,26 @@ def test_get_trading_cost_is_ask_minus_bid():
     broker, fake = make_broker()
     fake.tick_map[SYMBOL] = SimpleNamespace(bid=1.1000, ask=1.1002)
     assert broker.get_trading_cost(SYMBOL) == pytest.approx(0.0002)
+
+
+# --- Contract size (lot-based instruments) ---------------------------------
+
+
+def test_contract_size_reads_trade_contract_size_from_symbol_info():
+    broker, fake = make_broker()
+    fake.symbol_info_map[SYMBOL] = FakeSymbolInfo(trade_contract_size=100_000.0)
+    assert broker.contract_size(SYMBOL) == pytest.approx(100_000.0)
+
+
+def test_simulated_unrealized_pnl_scales_with_contract_size():
+    broker, fake = make_broker(allow_live_trading=False)
+    fake.symbol_info_map[SYMBOL] = FakeSymbolInfo(trade_contract_size=100_000.0)
+    fake.tick_map[SYMBOL] = SimpleNamespace(bid=1.10, ask=1.101)
+    position = broker.open_market_order(SYMBOL, Side.BUY, quantity=0.1, stop_loss=1.095)
+
+    fake.tick_map[SYMBOL] = SimpleNamespace(bid=1.1049, ask=1.1051)  # mid moved +0.005
+    pnl = broker.get_unrealized_pnl(position)
+
+    # move = 1.1050 - 1.1005(entry mid) = 0.0045; qty=0.1 * contract_size=100000 = 10000 units
+    expected_move = 1.1050 - position.entry_price
+    assert pnl == pytest.approx(expected_move * 0.1 * 100_000.0)

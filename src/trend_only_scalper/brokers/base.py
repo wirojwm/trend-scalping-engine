@@ -26,6 +26,15 @@ class Broker(ABC):
         """Release any connection/resources. Default no-op."""
         return None
 
+    def contract_size(self, symbol: str) -> float:
+        """Cash-per-price-unit multiplier for one unit of `quantity` on `symbol`.
+
+        Default 1.0 is correct for linear instruments where pnl = quantity * price_move
+        (Binance base-asset units, Mock/Simulated abstract units). Adapters where quantity
+        isn't 1:1 with cash-per-price-unit (e.g. MT5 lots) must override this.
+        """
+        return 1.0
+
     @abstractmethod
     def get_bars(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
         """Return the most recent `limit` OHLCV bars with columns:

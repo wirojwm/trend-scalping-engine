@@ -166,11 +166,15 @@ def _maybe_reset_daily_stats(state: LoopState, m1_bars: pd.DataFrame) -> None:
         state.daily_stats = DailyStats(trading_day=current_date)
 
 
-def _price_from_pnl(entry_price: float, quantity: float, pnl_cash: float, side: Side) -> float:
-    """Invert the linear PnL model (pnl = qty * price_move) to recover the exit price,
-    without needing a broker-specific "get exit price" method on the Broker interface.
+def _price_from_pnl(
+    entry_price: float, quantity: float, pnl_cash: float, side: Side, contract_size: float = 1.0
+) -> float:
+    """Invert the PnL model (pnl = qty * contract_size * price_move) to recover the exit
+    price, without needing a broker-specific "get exit price" method on the Broker interface.
+    contract_size must be the broker's actual Broker.contract_size(symbol) -- 1.0 for linear
+    instruments, e.g. an MT5 symbol's trade_contract_size for lot-based ones.
     """
-    move = pnl_cash / quantity
+    move = pnl_cash / (quantity * contract_size)
     return entry_price + move if side is Side.BUY else entry_price - move
 
 
@@ -185,7 +189,13 @@ def _write_trade_journal_row(
     realized_pnl: float,
 ) -> None:
     context = state.open_trade_context
-    exit_price = _price_from_pnl(position.entry_price, position.quantity, realized_pnl, position.side)
+    exit_price = _price_from_pnl(
+        position.entry_price,
+        position.quantity,
+        realized_pnl,
+        position.side,
+        contract_size=broker.contract_size(position.symbol),
+    )
     row = JournalRow(
         timestamp=datetime.now(),
         strategy_id=strategy_id,
@@ -316,6 +326,7 @@ def run_iteration(
             cfg.breakeven_trigger_cash,
             cfg.breakeven_lock_cash,
             cost_buffer_price=broker.get_trading_cost(symbol),
+            contract_size=broker.contract_size(symbol),
         )
         loop_logger.info(
             "position open side=%s qty=%s entry=%.5f sl=%.5f pnl=%.4f -> action=%s",
