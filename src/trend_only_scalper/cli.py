@@ -33,7 +33,7 @@ from trend_only_scalper.journal import read_journal_rows
 from trend_only_scalper.logging_config import setup_logging
 from trend_only_scalper.main import run_iteration
 from trend_only_scalper.metrics import calculate_metrics, print_safety_report
-from trend_only_scalper.models import DailyStats, LoopState
+from trend_only_scalper.models import DailyStats, LoopState, load_daily_stats, save_daily_stats
 
 logger = logging.getLogger("trend_only_scalper.cli")
 
@@ -157,7 +157,9 @@ def _run_continuous_loop(broker, strategy_cfg, args) -> None:
 
     broker.connect()
     try:
-        state = LoopState(daily_stats=DailyStats(trading_day=time.strftime("%Y-%m-%d")))
+        trading_day = time.strftime("%Y-%m-%d")
+        daily_stats = load_daily_stats(args.state_path, trading_day)
+        state = LoopState(daily_stats=daily_stats)
         iteration = 0
         consecutive_errors = 0
         while not shutdown.requested:
@@ -186,6 +188,7 @@ def _run_continuous_loop(broker, strategy_cfg, args) -> None:
                         consecutive_errors,
                     )
                     raise
+            save_daily_stats(args.state_path, state.daily_stats)
             if args.iterations and iteration >= args.iterations:
                 break
             if not shutdown.requested:
@@ -310,6 +313,10 @@ def build_parser() -> argparse.ArgumentParser:
     mt5_demo.add_argument("--iterations", type=int, default=0, help="0 = run until Ctrl+C")
     mt5_demo.add_argument("--loop-interval", type=float, default=5.0)
     mt5_demo.add_argument("--journal-path", default="logs/trade_journal_mt5.csv")
+    mt5_demo.add_argument(
+        "--state-path", default="logs/daily_stats_mt5.json",
+        help="Where daily-guard counters (trade_count/consecutive_losses) persist across restarts",
+    )
     mt5_demo.set_defaults(func=cmd_mt5_demo)
 
     binance_demo = subparsers.add_parser(
@@ -321,6 +328,10 @@ def build_parser() -> argparse.ArgumentParser:
     binance_demo.add_argument("--iterations", type=int, default=0, help="0 = run until Ctrl+C")
     binance_demo.add_argument("--loop-interval", type=float, default=5.0)
     binance_demo.add_argument("--journal-path", default="logs/trade_journal_binance.csv")
+    binance_demo.add_argument(
+        "--state-path", default="logs/daily_stats_binance.json",
+        help="Where daily-guard counters (trade_count/consecutive_losses) persist across restarts",
+    )
     binance_demo.set_defaults(func=cmd_binance_demo)
 
     safety_report = subparsers.add_parser("safety-report", help="Print the current config's safety settings")

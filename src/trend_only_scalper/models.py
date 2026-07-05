@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 
 
 class Side(str, Enum):
@@ -128,6 +130,45 @@ class DailyStats:
     trade_count: int = 0
     consecutive_losses: int = 0
     trades: list[ClosedTrade] = field(default_factory=list)
+
+
+def save_daily_stats(path: str | Path, stats: DailyStats) -> None:
+    """Persist the daily-guard counters (not the closed-trade list, already in the CSV
+    journal) so a mid-day process restart doesn't silently reset trade_count/
+    consecutive_losses back to zero -- weakening the daily guard right when a losing
+    streak is the reason it matters most.
+    """
+    data = {
+        "trading_day": stats.trading_day,
+        "realized_pnl_cash": stats.realized_pnl_cash,
+        "trade_count": stats.trade_count,
+        "consecutive_losses": stats.consecutive_losses,
+    }
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data))
+
+
+def load_daily_stats(path: str | Path, trading_day: str) -> DailyStats:
+    """Load persisted daily-guard counters for `trading_day`, or a fresh DailyStats if
+    there's nothing persisted yet or the persisted file is from a different (earlier)
+    trading day -- the normal calendar-day reset must still take priority.
+    """
+    path = Path(path)
+    if not path.exists():
+        return DailyStats(trading_day=trading_day)
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return DailyStats(trading_day=trading_day)
+    if data.get("trading_day") != trading_day:
+        return DailyStats(trading_day=trading_day)
+    return DailyStats(
+        trading_day=trading_day,
+        realized_pnl_cash=data.get("realized_pnl_cash", 0.0),
+        trade_count=data.get("trade_count", 0),
+        consecutive_losses=data.get("consecutive_losses", 0),
+    )
 
 
 @dataclass(frozen=True)

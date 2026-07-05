@@ -154,7 +154,7 @@ def test_binance_config_defaults_block_live_trading():
 # --- Continuous loop survives transient errors, gives up on persistent ones ------------
 
 
-def test_continuous_loop_recovers_from_transient_errors(monkeypatch):
+def test_continuous_loop_recovers_from_transient_errors(monkeypatch, tmp_path):
     call_count = {"n": 0}
 
     def flaky_run_iteration(broker, cfg, strategy_id, state, journal_path=None):
@@ -164,14 +164,17 @@ def test_continuous_loop_recovers_from_transient_errors(monkeypatch):
         return state
 
     monkeypatch.setattr(cli, "run_iteration", flaky_run_iteration)
-    args = argparse.Namespace(iterations=4, loop_interval=0.0, journal_path="unused.csv")
+    args = argparse.Namespace(
+        iterations=4, loop_interval=0.0, journal_path="unused.csv",
+        state_path=str(tmp_path / "daily_stats.json"),
+    )
 
     cli._run_continuous_loop(_FakeBroker(), StrategyConfig(symbol="EURUSD"), args)
 
     assert call_count["n"] == 4  # kept going despite 2 failures, completed all 4 requested
 
 
-def test_continuous_loop_stops_after_too_many_consecutive_errors(monkeypatch):
+def test_continuous_loop_stops_after_too_many_consecutive_errors(monkeypatch, tmp_path):
     call_count = {"n": 0}
 
     def always_fails(broker, cfg, strategy_id, state, journal_path=None):
@@ -179,12 +182,48 @@ def test_continuous_loop_stops_after_too_many_consecutive_errors(monkeypatch):
         raise RuntimeError("permanently broken")
 
     monkeypatch.setattr(cli, "run_iteration", always_fails)
-    args = argparse.Namespace(iterations=0, loop_interval=0.0, journal_path="unused.csv")
+    args = argparse.Namespace(
+        iterations=0, loop_interval=0.0, journal_path="unused.csv",
+        state_path=str(tmp_path / "daily_stats.json"),
+    )
 
     with pytest.raises(RuntimeError, match="permanently broken"):
         cli._run_continuous_loop(_FakeBroker(), StrategyConfig(symbol="EURUSD"), args)
 
     assert call_count["n"] == cli.MAX_CONSECUTIVE_ITERATION_ERRORS
+
+
+# --- DailyStats persistence across a restart ------------------------------
+
+
+def test_daily_stats_persist_across_a_restart(monkeypatch, tmp_path):
+    state_path = str(tmp_path / "daily_stats.json")
+
+    def bump_trade_count(broker, cfg, strategy_id, state, journal_path=None):
+        state.daily_stats.trade_count += 1
+        return state
+
+    monkeypatch.setattr(cli, "run_iteration", bump_trade_count)
+    first_run_args = argparse.Namespace(
+        iterations=3, loop_interval=0.0, journal_path="unused.csv", state_path=state_path
+    )
+    cli._run_continuous_loop(_FakeBroker(), StrategyConfig(symbol="EURUSD"), first_run_args)
+
+    captured = {}
+
+    def capture_starting_trade_count(broker, cfg, strategy_id, state, journal_path=None):
+        captured["trade_count_at_start"] = state.daily_stats.trade_count
+        return state
+
+    monkeypatch.setattr(cli, "run_iteration", capture_starting_trade_count)
+    second_run_args = argparse.Namespace(
+        iterations=1, loop_interval=0.0, journal_path="unused.csv", state_path=state_path
+    )
+    # A fresh _run_continuous_loop call simulates a process restart -- it must pick up the
+    # trade_count left by the first "session" instead of starting back at zero.
+    cli._run_continuous_loop(_FakeBroker(), StrategyConfig(symbol="EURUSD"), second_run_args)
+
+    assert captured["trade_count_at_start"] == 3
 
 
 # --- README commands match implemented CLI ------------------------------
