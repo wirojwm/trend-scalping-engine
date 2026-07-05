@@ -379,11 +379,18 @@ def run_iteration(
         return finish()
 
     trading_cost = broker.get_trading_cost(symbol)
-    if trading_cost >= cfg.tp_cash:
+    # get_trading_cost() is a price-unit spread/fee estimate (consistent with how it's used
+    # below as an ATR-scale cost buffer), so it must be converted to cash -- via the same
+    # quantity/contract_size that would actually be used to open the trade -- before it can
+    # be compared against the cash tp_cash target. Comparing the raw price-unit number
+    # directly (the old bug) happened to be harmless at FX/MT5 price scale, but permanently
+    # blocked trading at BTC/USDT scale where the price-unit number is large.
+    trading_cost_cash = trading_cost * cfg.default_quantity * broker.contract_size(symbol)
+    if trading_cost_cash >= cfg.tp_cash:
         decision["trading_cost_status"] = "too_high"
         loop_logger.info(
             "no trade: trading cost too high versus target (cost=%.4f >= tp_cash=%.4f)",
-            trading_cost, cfg.tp_cash,
+            trading_cost_cash, cfg.tp_cash,
         )
         decision["action_taken"] = "no_trade"
         decision["no_trade_reason"] = "trading_cost_too_high"

@@ -353,3 +353,38 @@ def test_m5_vwap_matches_full_session_when_more_than_bar_lookback_bars_elapsed()
     # produced a different value, proving the floor is actually necessary here.
     truncated_vwap = add_vwap(m5_full.tail(BAR_LOOKBACK))["vwap"].iloc[-1]
     assert truncated_vwap != pytest.approx(actual_vwap)
+
+
+# --- Trading-cost gate (cash-equivalent, not raw price-unit) ---------------
+
+
+def test_trade_blocked_when_cash_equivalent_trading_cost_meets_or_exceeds_tp():
+    cfg, broker = buy_ready_broker()
+    # cash-equivalent = trading_cost * default_quantity(1.0) * contract_size(1.0) == tp_cash
+    broker.trading_cost = cfg.tp_cash / cfg.default_quantity
+    state = make_state()
+
+    run_iteration(broker, cfg, STRATEGY_ID, state)
+
+    assert broker.get_position_count(cfg.symbol, STRATEGY_ID) == 0
+
+
+def test_trade_allowed_when_price_unit_cost_is_large_but_cash_equivalent_is_small():
+    # Simulates BTC/USDT scale: get_trading_cost() returns a large price-unit number (e.g.
+    # 2 * fee_rate * price ~= 48 for a $60k BTC price), which used to be compared directly
+    # against tp_cash and would wrongly block every trade. Converted to cash via a realistic
+    # small default_quantity (0.01), the true cost (0.48) is well under tp_cash (1.50).
+    # Bars are scaled to a BTC-like price/volatility so the (unrelated) ATR-vs-spread entry
+    # filter -- which legitimately compares this same price-unit cost against ATR -- doesn't
+    # itself reject the trade.
+    cfg = make_config(default_quantity=0.01)
+    m15 = make_trend_series("up", start=60_000.0, step=60.0, noise=60.0)
+    m5 = make_trend_series("up", start=60_000.0, step=60.0, noise=60.0)
+    m1 = append_pullback_bar(make_trend_series("up", start=60_000.0, step=60.0, noise=60.0), cfg, "up")
+    broker = seed_broker(cfg, m15, m5, m1)
+    broker.trading_cost = 48.0
+    state = make_state()
+
+    run_iteration(broker, cfg, STRATEGY_ID, state)
+
+    assert broker.get_position_count(cfg.symbol, STRATEGY_ID) == 1
