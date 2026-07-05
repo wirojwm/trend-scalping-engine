@@ -129,6 +129,26 @@ class MT5Config(BaseModel):
     server: str | None = Field(default=None, exclude=True)
     path: str | None = Field(default=None, exclude=True)
 
+    @model_validator(mode="after")
+    def _forbid_invalid_config(self) -> "MT5Config":
+        """Fail loudly at startup on nonsensical order/connection parameters, rather than
+        letting MT5 reject (or worse, silently misinterpret) them at order-send time.
+        """
+        violations: list[str] = []
+
+        if self.lot <= 0:
+            violations.append("lot must be positive")
+        if self.deviation < 0:
+            violations.append("deviation must be >= 0")
+        if self.max_spread_points <= 0:
+            violations.append("max_spread_points must be positive")
+        if self.timeout_ms <= 0:
+            violations.append("timeout_ms must be positive")
+
+        if violations:
+            raise ValueError(f"mt5.yaml has invalid configuration: {violations}")
+        return self
+
 
 class BinanceConfig(BaseModel):
     symbol: str
@@ -153,6 +173,28 @@ class BinanceConfig(BaseModel):
     # time -- never stored in YAML.
     api_key: str | None = Field(default=None, exclude=True)
     api_secret: str | None = Field(default=None, exclude=True)
+
+    @model_validator(mode="after")
+    def _forbid_invalid_config(self) -> "BinanceConfig":
+        """Fail loudly at startup on nonsensical order/fee parameters, rather than letting
+        ccxt reject (or worse, silently misinterpret) them at order-send time.
+        """
+        violations: list[str] = []
+
+        if self.leverage < 1:
+            violations.append("leverage must be >= 1")
+        if self.quantity <= 0:
+            violations.append("quantity must be positive")
+        if self.fee_rate_estimate < 0:
+            violations.append("fee_rate_estimate must be >= 0")
+        if self.max_cost_ratio_to_tp <= 0:
+            violations.append("max_cost_ratio_to_tp must be positive")
+        if self.recv_window <= 0:
+            violations.append("recv_window must be positive")
+
+        if violations:
+            raise ValueError(f"binance.yaml has invalid configuration: {violations}")
+        return self
 
 
 class EnvSecrets(BaseModel):

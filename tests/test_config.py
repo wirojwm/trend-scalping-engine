@@ -38,11 +38,39 @@ def test_load_mt5_config_without_env_secrets():
     assert mt5_cfg.login is None  # no .env present in test environment
 
 
+def test_mt5_config_rejects_invalid_values():
+    from trend_only_scalper.config import MT5Config
+
+    with pytest.raises(ValueError):
+        MT5Config(symbol="EURUSD", magic=1, lot=0)
+    with pytest.raises(ValueError):
+        MT5Config(symbol="EURUSD", magic=1, deviation=-1)
+    with pytest.raises(ValueError):
+        MT5Config(symbol="EURUSD", magic=1, max_spread_points=0)
+    with pytest.raises(ValueError):
+        MT5Config(symbol="EURUSD", magic=1, timeout_ms=0)
+
+
 def test_load_binance_config_defaults_to_testnet():
     binance_cfg = load_binance_config(f"{CONFIG_DIR}/binance.yaml")
     assert binance_cfg.market_type == "futures"
     assert binance_cfg.testnet is True
     assert binance_cfg.allow_live_trading is False
+
+
+def test_binance_config_rejects_invalid_values():
+    from trend_only_scalper.config import BinanceConfig
+
+    with pytest.raises(ValueError):
+        BinanceConfig(symbol="BTCUSDT", leverage=0)
+    with pytest.raises(ValueError):
+        BinanceConfig(symbol="BTCUSDT", quantity=0)
+    with pytest.raises(ValueError):
+        BinanceConfig(symbol="BTCUSDT", fee_rate_estimate=-0.001)
+    with pytest.raises(ValueError):
+        BinanceConfig(symbol="BTCUSDT", max_cost_ratio_to_tp=0)
+    with pytest.raises(ValueError):
+        BinanceConfig(symbol="BTCUSDT", recv_window=0)
 
 
 def test_load_app_config_mock_backend():
