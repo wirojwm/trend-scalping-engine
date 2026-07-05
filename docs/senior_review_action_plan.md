@@ -25,11 +25,10 @@ enforcement points. Fixes are being applied in small, independently-tested batch
 
 ## 2. Repository status at review time
 
-- Branch: `master`. **Phase R1 (all P0 items) is complete and pushed to `origin/master`:**
-  `a3d16ec` (items 1+2: contract-size-aware breakeven/journal + MT5 simulated pnl) →
-  `c679c9c` (item 3: VWAP truncation fix) → `6e305b1` (item 4: Binance trading-cost cash
-  conversion).
-- Test suite size: 183 tests before Phase R1, **191 passing** after all four R1 fixes.
+- Branch: `master`. **Phase R1 and Phase R2 (all P0 and P1 items) are complete and pushed to
+  `origin/master`:** `a3d16ec` → `c679c9c` → `6e305b1` (R1, items 1-4) → `2a06f69` → `776ab46`
+  → `f43fc8a` → `cee035d` (R2, items 5-8).
+- Test suite size: 183 tests before Phase R1, **207 passing** after R1+R2.
 - No secrets, `.env` files, or credentials present in the repository or in review artifacts.
 
 ---
@@ -47,12 +46,12 @@ enforcement points. Fixes are being applied in small, independently-tested batch
 
 ## 4. P1 important issues (before longer demo testing)
 
-| # | Issue | Why it matters | Risk if not fixed | Files |
-|---|---|---|---|---|
-| 5 | `MT5Config`/`BinanceConfig` have no `model_validator` | `StrategyConfig` has `_forbid_dangerous_config`; broker configs have no equivalent | Dangerous broker-level config combinations aren't caught at load time | `config.py` |
-| 6 | `safety-report` doesn't show `allow_live_trading` | Report only shows strategy-level flags + backend name string | Operator can misjudge whether live trading is actually enabled for a broker | `metrics.py`, `cli.py` |
-| 7 | Dead config fields (`lot`, `quantity`) can mislead sizing expectations | `mt5.yaml`'s `lot` and `binance.yaml`'s `quantity` are never read; `strategy.yaml`'s `default_quantity` is the real sizing knob for both | Operator edits a field expecting it to change order size — it silently has no effect | `config.py` |
-| 8 | `DailyStats` is in-memory only | `LoopState`/`DailyStats` have no persistence across process restarts | A mid-day restart after losses silently resets `trade_count`/`consecutive_losses`, weakening the daily guard | `models.py`, `cli.py` |
+| # | Issue | Why it matters | Risk if not fixed | Files | Status |
+|---|---|---|---|---|---|
+| 5 | `MT5Config`/`BinanceConfig` have no `model_validator` | `StrategyConfig` has `_forbid_dangerous_config`; broker configs have no equivalent | Dangerous broker-level config combinations aren't caught at load time | `config.py` | **Fixed** (`2a06f69`) |
+| 6 | `safety-report` doesn't show `allow_live_trading` | Report only shows strategy-level flags + backend name string | Operator can misjudge whether live trading is actually enabled for a broker | `metrics.py`, `cli.py` | **Fixed** (`776ab46`) |
+| 7 | Dead config fields (`lot`, `quantity`) can mislead sizing expectations | `mt5.yaml`'s `lot` and `binance.yaml`'s `quantity` are never read; `strategy.yaml`'s `default_quantity` is the real sizing knob for both | Operator edits a field expecting it to change order size — it silently has no effect | `config.py` | **Fixed** (`f43fc8a`) |
+| 8 | `DailyStats` is in-memory only | `LoopState`/`DailyStats` have no persistence across process restarts | A mid-day restart after losses silently resets `trade_count`/`consecutive_losses`, weakening the daily guard | `models.py`, `cli.py` | **Fixed** (`cee035d`) |
 
 ---
 
@@ -94,13 +93,13 @@ Phase R1 — P0 safety blockers only [COMPLETE]
   3) VWAP truncation fix                                       [done - c679c9c]
   4) Trading-cost cash conversion fix (main.py, not binance)   [done - 6e305b1]
 
-Phase R2 — P1 broker/config adapter issues [next]
-  5) MT5Config/BinanceConfig model_validator
-  6) safety-report allow_live_trading visibility
-  7) Dead lot/quantity field warning
-  8) DailyStats persistence across restarts
+Phase R2 — P1 broker/config adapter issues [COMPLETE]
+  5) MT5Config/BinanceConfig model_validator                    [done - 2a06f69]
+  6) safety-report allow_live_trading visibility                [done - 776ab46]
+  7) Dead lot/quantity field warning                             [done - f43fc8a]
+  8) DailyStats persistence across restarts                      [done - cee035d]
 
-Phase R3 — P1/P2 test coverage and documentation issues
+Phase R3 — P1/P2 test coverage and documentation issues [next]
   9) Distinguish BREAKEVEN_SL from HARD_SL in autonomous close detection
   10) Document testnet env/yaml merge behavior
   11) (optional, low priority) rename test files to match module under test
@@ -124,14 +123,16 @@ never a combined rewrite across phases.
   and allows a trade when the price-unit cost is large (BTC scale) but the cash-equivalent
   cost is small (item 4).
 
-**R2:**
-- `test_config.py`: invalid MT5/Binance config combinations raise at load time.
+**R2 (all done, 207 tests passing):**
+- `test_config.py`: invalid MT5/Binance config combinations raise at load time (item 5).
 - `test_metrics.py`/`test_cli.py`: safety report includes `allow_live_trading` for both
-  `true`/`false`.
+  `true`/`false`, and omits it for mock/backtest backends (item 6).
 - `test_config.py`: warning logged when a dead `lot`/`quantity` field is set to a non-default
-  value.
-- Daily guard persistence: restart-then-resume test restores `trade_count`/
-  `consecutive_losses` when `trading_day` matches, resets when the day has changed.
+  value, silent when left at default (item 7).
+- `test_models.py`: `save_daily_stats`/`load_daily_stats` round-trip on the same day, reset on
+  a new day, handle a missing/corrupt file gracefully. `test_cli.py`: a second
+  `_run_continuous_loop` call (simulating a restart) picks up `trade_count` where the first
+  left off (item 8).
 
 **R3:**
 - Autonomous-close test: after a `MODIFY_SL` (breakeven) then a broker-side close, the
@@ -148,7 +149,7 @@ its commit.
 | Phase | Commits |
 |---|---|
 | R1 | `fix review position management and mt5 broker safety` (`a3d16ec`, items 1+2) → `fix review vwap truncation handling` (`c679c9c`, item 3) → `fix review binance trading cost cash conversion` (`6e305b1`, item 4) — **all done** |
-| R2 | `fix review config validation: mt5/binance model validators` → `fix review broker adapter guards: safety-report shows allow_live_trading` → `fix review config validation: warn on unused lot/quantity fields` → `fix review safety blockers: persist daily guard stats across restarts` |
+| R2 | `fix review config validation: mt5/binance model validators` (`2a06f69`) → `fix review broker adapter guards: safety-report shows allow_live_trading` (`776ab46`) → `fix review config validation: warn on unused lot/quantity fields` (`f43fc8a`) → `fix review safety blockers: persist daily guard stats across restarts` (`cee035d`) — **all done** |
 | R3 | `fix review tests for risk guards: distinguish breakeven-sl from hard-sl` → `docs update review action plan: document testnet merge behavior` → (optional) `fix review tests for risk guards: rename test files to match module` |
 
 Each commit: run full verification first (compileall, pytest, CLI smoke tests), then commit
@@ -167,19 +168,19 @@ Before starting **any** demo session (MT5 or Binance), confirm:
 - [ ] Broker config's account/server fields double-checked as demo/testnet, not live
 - [ ] Relevant testing plan followed end-to-end: `docs/mt5_demo_testing_plan.md` or
       `docs/binance_futures_testnet_testing_plan.md`
-- [ ] Known-open items (Phase R2/R3) reviewed so any related odd behavior during demo is
+- [ ] Known-open items (Phase R3) reviewed so any related odd behavior during demo is
       recognized as already-known, not a new surprise
 
 Longer/unattended demo runs additionally require:
-- [ ] Phase R2 item 8 (`DailyStats` persistence) fixed, or an explicit decision to keep the
-      session short enough that a mid-session restart is not a realistic risk
+- [x] Phase R2 item 8 (`DailyStats` persistence) fixed — `--state-path` on `mt5-demo`/
+      `binance-demo` now survives a mid-session restart
 
 ---
 
 ## 12. Next immediate action
 
-Phase R1 (all P0 items) is complete. Next: start **Phase R2 item 5** — add a
-`model_validator` to `MT5Config`/`BinanceConfig` (mirroring `StrategyConfig`'s
-`_forbid_dangerous_config`) — as its own small batch: plan → approval → implement → test →
-commit. Continue down the phase list in order (R2 → R3); re-prioritize only if a new finding
-surfaces during implementation, and record any re-prioritization here.
+Phase R1 and Phase R2 (all P0 and P1 items) are complete. Next: start **Phase R3 item 9** —
+distinguish `CloseReason.BREAKEVEN_SL` from `HARD_SL` in autonomous close detection — as its
+own small batch: plan → approval → implement → test → commit. Continue down the phase list
+in order (item 9 → 10 → optional 11); re-prioritize only if a new finding surfaces during
+implementation, and record any re-prioritization here.
