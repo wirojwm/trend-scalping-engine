@@ -33,7 +33,7 @@ swing_lookback: 20      # bars to look back for the swing low/high used as the S
 sl_atr_buffer: 0.5      # extra ATR multiples added beyond the swing point
 
 # MVP fixed order size; risk-based position sizing from stop distance is future work.
-default_quantity: 1.0
+default_quantity: 0.01
 
 # Position management (cash-based, per position)
 tp_cash: 1.50
