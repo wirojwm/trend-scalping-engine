@@ -7,12 +7,13 @@ math run_iteration() itself uses.
 """
 
 import pandas as pd
+import pytest
 
 from trend_only_scalper.brokers.mock_broker import MockBroker
 from trend_only_scalper.config import StrategyConfig
-from trend_only_scalper.indicators import add_atr, add_ema
+from trend_only_scalper.indicators import add_atr, add_ema, add_vwap
 from trend_only_scalper.journal import read_journal_rows
-from trend_only_scalper.main import run_iteration
+from trend_only_scalper.main import BAR_LOOKBACK, VWAP_BAR_LOOKBACK, run_iteration
 from trend_only_scalper.models import CloseReason, DailyStats, LoopState, Side
 from trend_only_scalper.risk.cooldown import start_cooldown
 
@@ -299,3 +300,56 @@ def test_run_iteration_resets_daily_stats_on_new_calendar_day():
     assert state.daily_stats.trading_day == "2026-01-02"
     assert state.daily_stats.trade_count == 0
     assert state.daily_stats.consecutive_losses == 0
+
+
+# --- M5 VWAP truncation (BAR_LOOKBACK must not cut off the M5 session) -----
+
+
+class RecordingBroker(MockBroker):
+    """A MockBroker that records the `limit` each get_bars() call was made with."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.get_bars_limits: dict[str, int] = {}
+
+    def get_bars(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+        self.get_bars_limits[timeframe] = limit
+        return super().get_bars(symbol, timeframe, limit)
+
+
+def test_m5_bars_are_fetched_with_a_full_day_floor_for_vwap():
+    # BAR_LOOKBACK (100) is tuned for slow-EMA warmup, not for add_vwap()'s per-calendar-date
+    # cumulative sum -- the M5 fetch must use a larger floor (VWAP_BAR_LOOKBACK) so a session
+    # more than ~8 hours old never gets its early bars silently dropped before VWAP runs.
+    cfg = make_config()
+    broker = RecordingBroker(symbol=cfg.symbol, strategy_id=STRATEGY_ID)
+    broker.set_bars("M15", make_trend_series("up"))
+    broker.set_bars("M5", make_trend_series("up"))
+    broker.set_bars("M1", make_trend_series("up"))
+    state = make_state()
+
+    run_iteration(broker, cfg, STRATEGY_ID, state)
+
+    assert broker.get_bars_limits["M5"] == max(BAR_LOOKBACK, VWAP_BAR_LOOKBACK)
+    assert broker.get_bars_limits["M15"] == BAR_LOOKBACK
+    assert broker.get_bars_limits["M1"] == BAR_LOOKBACK
+
+
+def test_m5_vwap_matches_full_session_when_more_than_bar_lookback_bars_elapsed():
+    # 150 M5 bars, all on the same calendar day: more than BAR_LOOKBACK (100), so a naive
+    # tail(BAR_LOOKBACK) fetch would drop the first 50 bars of today's session and produce a
+    # truncated (wrong) VWAP. VWAP_BAR_LOOKBACK (288) covers a full day, so nothing is dropped.
+    cfg = make_config()
+    m5_full = make_trend_series("up", bars=150)
+    expected_vwap = add_vwap(m5_full)["vwap"].iloc[-1]
+
+    broker = MockBroker(symbol=cfg.symbol, strategy_id=STRATEGY_ID)
+    broker.set_bars("M5", m5_full)
+    fetched_m5 = broker.get_bars(cfg.symbol, "M5", max(BAR_LOOKBACK, VWAP_BAR_LOOKBACK))
+    actual_vwap = add_vwap(fetched_m5)["vwap"].iloc[-1]
+
+    assert actual_vwap == pytest.approx(expected_vwap)
+    # Sanity check: truncating to BAR_LOOKBACK alone (the old, buggy behavior) would have
+    # produced a different value, proving the floor is actually necessary here.
+    truncated_vwap = add_vwap(m5_full.tail(BAR_LOOKBACK))["vwap"].iloc[-1]
+    assert truncated_vwap != pytest.approx(actual_vwap)

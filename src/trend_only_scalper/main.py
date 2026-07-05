@@ -54,6 +54,9 @@ logger = logging.getLogger("trend_only_scalper.main")
 loop_logger = logging.getLogger("trend_only_scalper.bot_loop")
 
 BAR_LOOKBACK = 100  # bars fetched per timeframe each iteration -- enough for slow-EMA warmup
+VWAP_BAR_LOOKBACK = 288  # M5 bars in a full 24h session (24*60/5) -- add_vwap() resets its
+# cumulative sum per calendar date, so the M5 fetch must always reach back to today's first
+# bar or the VWAP silently starts mid-session instead of from the session open.
 DEFAULT_JOURNAL_PATH = "logs/trade_journal.csv"
 
 
@@ -260,7 +263,7 @@ def run_iteration(
         return state
 
     m15_bars = broker.get_bars(symbol, "M15", bar_lookback)
-    m5_bars = broker.get_bars(symbol, "M5", bar_lookback)
+    m5_bars = broker.get_bars(symbol, "M5", max(bar_lookback, VWAP_BAR_LOOKBACK))
     m1_bars = broker.get_bars(symbol, "M1", bar_lookback)
 
     _maybe_reset_daily_stats(state, m1_bars)
