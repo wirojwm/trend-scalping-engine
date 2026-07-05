@@ -51,6 +51,26 @@ def test_mt5_config_rejects_invalid_values():
         MT5Config(symbol="EURUSD", magic=1, timeout_ms=0)
 
 
+def test_load_mt5_config_warns_when_lot_is_not_default(tmp_path, caplog):
+    path = tmp_path / "mt5.yaml"
+    path.write_text('symbol: "EURUSD"\nmagic: 1\nlot: 0.05\n')
+
+    with caplog.at_level("WARNING", logger="trend_only_scalper.config"):
+        load_mt5_config(path)
+
+    assert any("lot" in record.message for record in caplog.records)
+
+
+def test_load_mt5_config_does_not_warn_when_lot_is_default(tmp_path, caplog):
+    path = tmp_path / "mt5.yaml"
+    path.write_text('symbol: "EURUSD"\nmagic: 1\n')
+
+    with caplog.at_level("WARNING", logger="trend_only_scalper.config"):
+        load_mt5_config(path)
+
+    assert not caplog.records
+
+
 def test_load_binance_config_defaults_to_testnet():
     binance_cfg = load_binance_config(f"{CONFIG_DIR}/binance.yaml")
     assert binance_cfg.market_type == "futures"
@@ -71,6 +91,26 @@ def test_binance_config_rejects_invalid_values():
         BinanceConfig(symbol="BTCUSDT", max_cost_ratio_to_tp=0)
     with pytest.raises(ValueError):
         BinanceConfig(symbol="BTCUSDT", recv_window=0)
+
+
+def test_load_binance_config_warns_when_quantity_is_not_default(tmp_path, caplog):
+    path = tmp_path / "binance.yaml"
+    path.write_text('symbol: "BTCUSDT"\nquantity: 0.01\n')
+
+    with caplog.at_level("WARNING", logger="trend_only_scalper.config"):
+        load_binance_config(path)
+
+    assert any("quantity" in record.message for record in caplog.records)
+
+
+def test_load_binance_config_does_not_warn_when_quantity_is_default(tmp_path, caplog):
+    path = tmp_path / "binance.yaml"
+    path.write_text('symbol: "BTCUSDT"\n')
+
+    with caplog.at_level("WARNING", logger="trend_only_scalper.config"):
+        load_binance_config(path)
+
+    assert not caplog.records
 
 
 def test_load_app_config_mock_backend():

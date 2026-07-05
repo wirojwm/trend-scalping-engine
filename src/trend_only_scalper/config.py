@@ -6,6 +6,7 @@ ever come from environment variables / .env, never from YAML or source code.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Literal
@@ -13,6 +14,8 @@ from typing import Literal
 import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger("trend_only_scalper.config")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_DIR = PROJECT_ROOT / "config"
@@ -281,7 +284,15 @@ def load_mt5_config(
         server=os.getenv(data.get("server_env", "MT5_SERVER")) or None,
         path=data.get("terminal_path_optional"),
     )
-    return MT5Config.model_validate(data)
+    cfg = MT5Config.model_validate(data)
+    if cfg.lot != MT5Config.model_fields["lot"].default:
+        logger.warning(
+            "mt5.yaml's 'lot' field is set to %s, but it is never used for order sizing -- "
+            "strategy.yaml's default_quantity is the real sizing knob for every broker. "
+            "Edit default_quantity instead, or this change has no effect.",
+            cfg.lot,
+        )
+    return cfg
 
 
 def load_binance_config(
@@ -300,7 +311,15 @@ def load_binance_config(
     # and env agrees; default posture is always the safer (testnet=true) of the two.
     env_testnet = _parse_bool_env(os.getenv("BINANCE_TESTNET"), default=True)
     data["testnet"] = data.get("testnet", True) or env_testnet
-    return BinanceConfig.model_validate(data)
+    cfg = BinanceConfig.model_validate(data)
+    if cfg.quantity != BinanceConfig.model_fields["quantity"].default:
+        logger.warning(
+            "binance.yaml's 'quantity' field is set to %s, but it is never used for order "
+            "sizing -- strategy.yaml's default_quantity is the real sizing knob for every "
+            "broker. Edit default_quantity instead, or this change has no effect.",
+            cfg.quantity,
+        )
+    return cfg
 
 
 def load_app_config(
