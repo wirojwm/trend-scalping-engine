@@ -307,8 +307,11 @@ def load_binance_config(
         api_key=os.getenv(data.get("api_key_env", "BINANCE_API_KEY")) or None,
         api_secret=os.getenv(data.get("api_secret_env", "BINANCE_API_SECRET")) or None,
     )
-    # .env BINANCE_TESTNET overrides binance.yaml's testnet unless yaml explicitly says false
-    # and env agrees; default posture is always the safer (testnet=true) of the two.
+    # Merge is (yaml testnet) OR (env BINANCE_TESTNET), and _parse_bool_env defaults the env
+    # side to True when BINANCE_TESTNET is unset -- so the result is only ever False when
+    # BOTH binance.yaml's testnet: false AND an explicit BINANCE_TESTNET=false (or 0/no/off)
+    # agree. Either side alone left at its safer default keeps testnet=True. This is
+    # intentional: going to mainnet should never be a one-sided accident.
     env_testnet = _parse_bool_env(os.getenv("BINANCE_TESTNET"), default=True)
     data["testnet"] = data.get("testnet", True) or env_testnet
     cfg = BinanceConfig.model_validate(data)

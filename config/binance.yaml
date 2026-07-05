@@ -8,6 +8,11 @@
 
 symbol: "BTC/USDT"
 market_type: "futures"        # futures | spot -- short selling requires "futures"
+# testnet is merged with .env's BINANCE_TESTNET as (this value OR the env value), and the
+# env value itself defaults to true when unset -- so the safer "testnet" posture always
+# wins unless BOTH sides explicitly agree to go live. Setting testnet: false here alone
+# does NOT switch to mainnet: you must also set BINANCE_TESTNET=false in .env, or this
+# stays on testnet silently. See config.py's load_binance_config() for the exact merge.
 testnet: true                 # must be true until explicitly promoted to live trading
 dry_run: true
 
