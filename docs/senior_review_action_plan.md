@@ -170,12 +170,20 @@ only the files in scope for that item — never a combined "batch everything" co
 Before starting **any** demo session (MT5 or Binance), confirm:
 
 - [x] All Phase R1 (P0) items fixed, tested, and committed
-- [ ] `pytest -q` passes with zero failures on the commit being demoed
-- [ ] `safety-report` reviewed and `allow_live_trading` confirmed `false` unless the demo
-      explicitly intends to place real orders on a demo/testnet account
-- [ ] Broker config's account/server fields double-checked as demo/testnet, not live
-- [ ] Relevant testing plan followed end-to-end: `docs/mt5_demo_testing_plan.md` or
-      `docs/binance_futures_testnet_testing_plan.md`
+- [x] `pytest -q` passes with zero failures on the commit being demoed (208 passed, confirmed
+      repeatedly throughout dry-run testing)
+- [x] `safety-report` reviewed and `allow_live_trading` confirmed `false` for both MT5 and
+      Binance backends before every dry-run session
+- [x] Broker account confirmed demo/testnet before running: MT5 `trade_mode=0` (demo,
+      `ThinkMarkets-Demo`) verified directly via `account_info()`; Binance `testnet: true`
+      verified via `_exchange.urls['api']` pointing at `testnet.binancefuture.com`
+- [x] Dry-run sections of both testing plans completed end-to-end: MT5
+      `docs/mt5_demo_testing_plan.md` §1-6 (20-iteration smoke test + a full 1-hour, 720-iteration
+      background run, zero errors); Binance `docs/binance_futures_testnet_testing_plan.md`
+      §1-8 (same pattern, zero errors, one simulated entry held the full hour without
+      closing). **Real-order sections (MT5 §7, Binance §9) are NOT done** — AutoTrading was
+      off in the MT5 terminal and no Binance API key is configured; both are required before
+      attempting real (even minimum-size) orders.
 - [x] Known-open items reviewed — only item 11 (optional test renames) remains, and it has
       no functional impact
 
@@ -183,13 +191,27 @@ Longer/unattended demo runs additionally require:
 - [x] Phase R2 item 8 (`DailyStats` persistence) fixed — `--state-path` on `mt5-demo`/
       `binance-demo` now survives a mid-session restart
 
+**Breakeven and cash-TP mechanics** (not naturally exercised in either live dry-run, since
+price never moved enough in either 1-hour window): confirmed working correctly and
+reproducibly via `replay` against `data/sample_m1.csv` with a scaled-up test quantity — entry
+→ breakeven `MODIFY_SL` (new SL above entry for the BUY) → `TP_CASH` close (`pnl=1.5075`,
+matching `tp_cash: 1.50`) → `cooldown_after_tp_bars` all fired exactly as expected, twice in a
+row (deterministic replay). This used a temporary, scratchpad-only strategy config, never
+touching `config/strategy.yaml`.
+
 ---
 
 ## 12. Next immediate action
 
-All findings from the senior review (P0/P1/P2, items 1-10) are fixed, tested, and pushed to
-`origin/master`. Item 11 is explicitly skipped (no functional risk). There is no further
-action item from this review — the demo-readiness checklist in section 11 is fully
-satisfied. Next steps are outside the scope of this document: proceed with actual MT5/
-Binance demo testing per `docs/mt5_demo_testing_plan.md` / `docs/binance_futures_testnet_testing_plan.md`,
-and only return here if a new finding surfaces.
+**All findings from the senior review (P0/P1/P2, items 1-10) are fixed, tested, and pushed
+to `origin/master`. Item 11 is explicitly skipped. Both dry-run demo testing plans (MT5 §1-6,
+Binance §1-8) are now also complete**, including a full 1-hour, 720-iteration background run
+on each backend with zero errors, and `replay`-based confirmation that breakeven and cash-TP
+mechanics fire correctly end-to-end. The demo-readiness checklist in section 11 is fully
+satisfied for dry-run use.
+
+Nothing further is required from this document. If real (even minimum-size) order testing is
+wanted next, that's a new, separate activity outside this review's scope: it needs the MT5
+terminal's AutoTrading enabled and a Binance testnet API key configured first, then
+`docs/mt5_demo_testing_plan.md` §7+ / `docs/binance_futures_testnet_testing_plan.md` §9+.
+Only return to this document if a new finding surfaces during that testing.
