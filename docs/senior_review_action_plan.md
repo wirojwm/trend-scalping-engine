@@ -25,16 +25,11 @@ enforcement points. Fixes are being applied in small, independently-tested batch
 
 ## 2. Repository status at review time
 
-- Branch: `master`. Last fully committed history: `docs add mt5 and binance demo testing
-  plans` → `Add CLAUDE.md, decision-log.md` → `docs update progress-note with P0-new
-  priority and next-session plan`.
-- **In progress (uncommitted at time of writing):** Phase R1 batch, item 1+2 — contract-size
-  -aware breakeven lock + journal exit-price, and the matching MT5 simulated
-  `get_unrealized_pnl` fix. 6 files changed (`brokers/base.py`, `brokers/mt5_broker.py`,
-  `main.py`, `strategy/position_manager.py`, `tests/test_mt5_broker_contract.py`,
-  `tests/test_position_manager.py`), verified via `pytest -q` (187 passed) and CLI smoke
-  tests, awaiting explicit commit/push approval.
-- Test suite size: 183 tests at last commit, 187 with the in-progress batch.
+- Branch: `master`. **Phase R1 (all P0 items) is complete and pushed to `origin/master`:**
+  `a3d16ec` (items 1+2: contract-size-aware breakeven/journal + MT5 simulated pnl) →
+  `c679c9c` (item 3: VWAP truncation fix) → `6e305b1` (item 4: Binance trading-cost cash
+  conversion).
+- Test suite size: 183 tests before Phase R1, **191 passing** after all four R1 fixes.
 - No secrets, `.env` files, or credentials present in the repository or in review artifacts.
 
 ---
@@ -43,10 +38,10 @@ enforcement points. Fixes are being applied in small, independently-tested batch
 
 | # | Issue | Why it matters | Risk if not fixed | Files | Status |
 |---|---|---|---|---|---|
-| 1 | Breakeven lock / journal exit-price wrong for MT5 lot sizing | `_cash_to_price_distance()`/`_price_from_pnl()` assumed `contract_size=1`, wrong for MT5 lots | Breakeven stop-loss computed at the wrong price on MT5 — a direct safety-rule violation | `strategy/position_manager.py`, `main.py`, `brokers/base.py`, `brokers/mt5_broker.py` | **Fix in progress** (uncommitted) |
-| 2 | MT5 simulated `get_unrealized_pnl` ignores contract size | Dry-run/demo mode (`allow_live_trading=False`) computed pnl as `move * quantity` only | Demo testing (the tool meant to catch exactly this class of bug) would show wrong pnl/TP triggers | `brokers/mt5_broker.py` | **Fix in progress** (uncommitted) |
-| 3 | VWAP truncation in M5 confirmation filter | `BAR_LOOKBACK=100` slices bars *before* `add_vwap()` runs, breaking the cumulative-per-session calculation (~2.4% deviation observed) | M5 confirmation filter feeds a materially wrong reference price into real entry decisions | `main.py` (`_add_confirmation_indicators`) | Not started |
-| 4 | Binance `get_trading_cost()` unit mismatch blocks all trading | Returns a price-unit cost (`2 * fee_rate * price`), compared directly against flat cash `tp_cash` | At BTC/USDT scale this permanently exceeds `tp_cash`, silently preventing any trade on Binance demo | `brokers/binance_broker.py` | Not started |
+| 1 | Breakeven lock / journal exit-price wrong for MT5 lot sizing | `_cash_to_price_distance()`/`_price_from_pnl()` assumed `contract_size=1`, wrong for MT5 lots | Breakeven stop-loss computed at the wrong price on MT5 — a direct safety-rule violation | `strategy/position_manager.py`, `main.py`, `brokers/base.py`, `brokers/mt5_broker.py` | **Fixed** (`a3d16ec`) |
+| 2 | MT5 simulated `get_unrealized_pnl` ignores contract size | Dry-run/demo mode (`allow_live_trading=False`) computed pnl as `move * quantity` only | Demo testing (the tool meant to catch exactly this class of bug) would show wrong pnl/TP triggers | `brokers/mt5_broker.py` | **Fixed** (`a3d16ec`) |
+| 3 | VWAP truncation in M5 confirmation filter | `BAR_LOOKBACK=100` slices bars *before* `add_vwap()` runs, breaking the cumulative-per-session calculation (~2.4% deviation observed) | M5 confirmation filter feeds a materially wrong reference price into real entry decisions | `main.py` (`_add_confirmation_indicators`, M5 bar fetch) | **Fixed** (`c679c9c`) |
+| 4 | Trading-cost cash/price-unit mismatch blocks all trading at BTC scale | `get_trading_cost()` is (correctly) a price-unit spread/fee estimate everywhere, but `main.py`'s entry gate compared it directly against the cash `tp_cash` target — root cause was in `main.py`, not the Binance broker itself | At BTC/USDT scale the price-unit number is large enough to permanently exceed `tp_cash`, silently preventing any trade on Binance demo | `main.py` (entry-gate cash conversion; `brokers/binance_broker.py` unchanged) | **Fixed** (`6e305b1`) |
 
 ---
 
@@ -93,13 +88,13 @@ enforcement points. Fixes are being applied in small, independently-tested batch
 ## 8. Recommended fix phases
 
 ```
-Phase R1 — P0 safety blockers only
-  1) Contract-size-aware breakeven + journal exit-price       [in progress]
-  2) MT5 simulated get_unrealized_pnl contract-size fix        [in progress]
-  3) VWAP truncation fix                                       [not started]
-  4) Binance trading-cost unit-mismatch fix                    [not started]
+Phase R1 — P0 safety blockers only [COMPLETE]
+  1) Contract-size-aware breakeven + journal exit-price       [done - a3d16ec]
+  2) MT5 simulated get_unrealized_pnl contract-size fix        [done - a3d16ec]
+  3) VWAP truncation fix                                       [done - c679c9c]
+  4) Trading-cost cash conversion fix (main.py, not binance)   [done - 6e305b1]
 
-Phase R2 — P1 broker/config adapter issues
+Phase R2 — P1 broker/config adapter issues [next]
   5) MT5Config/BinanceConfig model_validator
   6) safety-report allow_live_trading visibility
   7) Dead lot/quantity field warning
@@ -118,15 +113,16 @@ never a combined rewrite across phases.
 
 ## 9. Test plan per fix phase
 
-**R1:**
+**R1 (all done, 191 tests passing):**
 - `test_position_manager.py`: contract_size≠1 case (MT5-style lot) + default contract_size=1.0
-  regression case (done for items 1–2).
+  regression case (items 1–2).
 - `test_mt5_broker_contract.py`: `contract_size()` reads `trade_contract_size`; simulated
-  `get_unrealized_pnl` scales correctly (done for items 1–2).
-- VWAP fix: synthetic multi-day OHLCV test asserting VWAP matches full-session calculation,
-  not a truncated window.
-- Binance cost fix: `test_binance_broker_contract.py` case asserting cost is a cash amount
-  scaled by quantity, not a bare price-unit difference.
+  `get_unrealized_pnl` scales correctly (items 1–2).
+- `test_bot_loop.py`: M5 bars fetched with a `VWAP_BAR_LOOKBACK` (288) floor, and VWAP on a
+  150-bar same-day session matches the untruncated calculation (item 3).
+- `test_bot_loop.py`: entry gate blocks when the cash-equivalent cost meets/exceeds `tp_cash`,
+  and allows a trade when the price-unit cost is large (BTC scale) but the cash-equivalent
+  cost is small (item 4).
 
 **R2:**
 - `test_config.py`: invalid MT5/Binance config combinations raise at load time.
@@ -151,7 +147,7 @@ its commit.
 
 | Phase | Commits |
 |---|---|
-| R1 | `fix review safety blockers: contract-size-aware breakeven lock and mt5 simulated pnl` (items 1+2, batched — done, pending approval) → `fix review safety blockers: vwap truncation in m5 confirmation` (item 3) → `fix review safety blockers: binance trading-cost unit mismatch` (item 4) |
+| R1 | `fix review position management and mt5 broker safety` (`a3d16ec`, items 1+2) → `fix review vwap truncation handling` (`c679c9c`, item 3) → `fix review binance trading cost cash conversion` (`6e305b1`, item 4) — **all done** |
 | R2 | `fix review config validation: mt5/binance model validators` → `fix review broker adapter guards: safety-report shows allow_live_trading` → `fix review config validation: warn on unused lot/quantity fields` → `fix review safety blockers: persist daily guard stats across restarts` |
 | R3 | `fix review tests for risk guards: distinguish breakeven-sl from hard-sl` → `docs update review action plan: document testnet merge behavior` → (optional) `fix review tests for risk guards: rename test files to match module` |
 
@@ -164,7 +160,7 @@ only the files in scope for that item — never a combined "batch everything" co
 
 Before starting **any** demo session (MT5 or Binance), confirm:
 
-- [ ] All Phase R1 (P0) items fixed, tested, and committed
+- [x] All Phase R1 (P0) items fixed, tested, and committed
 - [ ] `pytest -q` passes with zero failures on the commit being demoed
 - [ ] `safety-report` reviewed and `allow_live_trading` confirmed `false` unless the demo
       explicitly intends to place real orders on a demo/testnet account
@@ -182,9 +178,8 @@ Longer/unattended demo runs additionally require:
 
 ## 12. Next immediate action
 
-1. Get explicit approval to commit + push the in-progress Phase R1 item 1+2 batch
-   (contract-size fix), currently verified but uncommitted.
-2. Start Phase R1 item 3 (VWAP truncation) as its own small batch: plan → approval →
-   implement → test → commit.
-3. Continue down the phase list in order (R1 → R2 → R3); re-prioritize only if a new
-   finding surfaces during implementation, and record any re-prioritization here.
+Phase R1 (all P0 items) is complete. Next: start **Phase R2 item 5** — add a
+`model_validator` to `MT5Config`/`BinanceConfig` (mirroring `StrategyConfig`'s
+`_forbid_dangerous_config`) — as its own small batch: plan → approval → implement → test →
+commit. Continue down the phase list in order (R2 → R3); re-prioritize only if a new finding
+surfaces during implementation, and record any re-prioritization here.
