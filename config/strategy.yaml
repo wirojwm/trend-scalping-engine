@@ -7,7 +7,7 @@
 # <= 0, tp_cash <= 0, breakeven_trigger_cash <= 0, swing_lookback < 1, sl_atr_buffer < 0).
 # See the README's safety checklist before enabling any real demo order.
 
-symbol: "EURUSD"
+symbol: "BTC/USDT"
 account_mode: "demo"          # demo | live -- live order placement is additionally gated
                                # per-broker by mt5.yaml/binance.yaml's allow_live_trading
 
