@@ -14,7 +14,7 @@ CONFIG_DIR = "config"
 
 def test_load_strategy_config_defaults():
     strategy = load_strategy_config(f"{CONFIG_DIR}/strategy.yaml")
-    assert strategy.symbol == "EURUSD"
+    assert strategy.symbol == "BTC/USDT"
     assert strategy.dry_run is True
     assert strategy.one_position_only is True
     assert strategy.tp_cash == 1.50
