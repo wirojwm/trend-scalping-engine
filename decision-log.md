@@ -39,3 +39,17 @@ no grid/martingale/averaging-down, hard SL, cash TP, breakeven lock, daily guard
 `test_replay_backtest.py`, `test_binance_broker_contract.py`)
 
 **ผลทดสอบ:** `pytest -q` → **183 passed**, ไม่มี regression
+
+---
+
+## 2026-07-12 — แก้ test default symbol ให้ตรงกับ config ที่เตรียม Binance testnet
+
+**สิ่งที่ทำ:** `config/strategy.yaml` ถูกเปลี่ยน symbol เป็น `BTC/USDT` ตั้งแต่ commit `d83594e`
+(เตรียม Binance testnet) แต่ `tests/test_config.py::test_load_strategy_config_defaults` ยังคง
+assert ค่าเดิม `EURUSD` อยู่ ทำให้ test แดง — เป็นแค่ test ที่ตกยุคตาม config ไม่ใช่ runtime defect
+แก้เฉพาะบรรทัด assertion ให้ตรงกับ symbol ปัจจุบัน ไม่แตะ production logic ใดๆ
+
+**ผลทดสอบ:** `python -m compileall src tests scripts` ผ่าน, `pytest -q` → **211 passed**
+
+**Commit:** `e9e8243` — "test update strategy default symbol for binance prep" (pushed to
+`origin/master`)
