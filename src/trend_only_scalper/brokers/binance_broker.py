@@ -78,8 +78,8 @@ class BinanceBroker(Broker):
         ccxt = _import_ccxt_module()
         exchange = ccxt.binance(
             {
-                "apiKey": self.config.api_key or "",
-                "secret": self.config.api_secret or "",
+                "apiKey": self.config.api_key.get_secret_value() if self.config.api_key else "",
+                "secret": self.config.api_secret.get_secret_value() if self.config.api_secret else "",
                 "enableRateLimit": True,
                 "options": {"defaultType": "future" if self.config.market_type == "futures" else "spot"},
             }

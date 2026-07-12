@@ -13,7 +13,7 @@ from typing import Literal
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, SecretStr, model_validator
 
 logger = logging.getLogger("trend_only_scalper.config")
 
@@ -173,9 +173,10 @@ class BinanceConfig(BaseModel):
     recv_window: int = 5000
 
     # Secrets, resolved from the environment (via the *_env indirection above) at load
-    # time -- never stored in YAML.
-    api_key: str | None = Field(default=None, exclude=True)
-    api_secret: str | None = Field(default=None, exclude=True)
+    # time -- never stored in YAML. SecretStr keeps the value out of repr()/str()/logs;
+    # callers must use .get_secret_value() to read the plaintext.
+    api_key: SecretStr | None = Field(default=None, exclude=True)
+    api_secret: SecretStr | None = Field(default=None, exclude=True)
 
     @model_validator(mode="after")
     def _forbid_invalid_config(self) -> "BinanceConfig":
