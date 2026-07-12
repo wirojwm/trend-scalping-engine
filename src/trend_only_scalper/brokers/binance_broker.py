@@ -86,6 +86,10 @@ class BinanceBroker(Broker):
         )
         if self.config.testnet:
             exchange.set_sandbox_mode(True)
+            if self.config.market_type == "futures":
+                # ccxt 4.5.64 raises NotSupported on authenticated Futures testnet calls
+                # (e.g. fetch_balance) unless this is set after sandbox mode is enabled.
+                exchange.options["disableFuturesSandboxWarning"] = True
         return exchange
 
     # --- lifecycle -----------------------------------------------------------

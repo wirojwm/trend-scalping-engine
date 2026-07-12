@@ -387,3 +387,28 @@ def test_get_account_equity_reads_usdt_total():
     broker, fake = make_broker()
     fake.balance = {"USDT": {"total": 543.21}}
     assert broker.get_account_equity() == pytest.approx(543.21)
+
+
+# --- Exchange construction / sandbox guard ---------------------------------
+
+
+def test_build_exchange_sets_futures_sandbox_warning_option_on_testnet():
+    """ccxt 4.5.64 raises NotSupported on authenticated Futures testnet calls unless
+    this option is set after sandbox mode is enabled -- exercised here with the real
+    ccxt.binance constructor (no network calls happen during construction).
+    """
+    cfg = BinanceConfig(symbol=SYMBOL, market_type="futures", testnet=True)
+    broker = BinanceBroker(cfg, strategy_id=STRATEGY_ID)
+    assert broker._exchange.options["disableFuturesSandboxWarning"] is True
+
+
+def test_build_exchange_skips_futures_sandbox_warning_option_for_spot():
+    cfg = BinanceConfig(symbol=SYMBOL, market_type="spot", testnet=True)
+    broker = BinanceBroker(cfg, strategy_id=STRATEGY_ID)
+    assert "disableFuturesSandboxWarning" not in broker._exchange.options
+
+
+def test_build_exchange_skips_futures_sandbox_warning_option_when_not_testnet():
+    cfg = BinanceConfig(symbol=SYMBOL, market_type="futures", testnet=False)
+    broker = BinanceBroker(cfg, strategy_id=STRATEGY_ID)
+    assert "disableFuturesSandboxWarning" not in broker._exchange.options
