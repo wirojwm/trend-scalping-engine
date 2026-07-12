@@ -285,7 +285,10 @@ def cmd_safety_report(args: argparse.Namespace) -> int:
 
 
 def _print_journal_and_metrics(journal_path: str) -> None:
-    print(f"\nJournal saved to: {Path(journal_path).resolve()}")
+    if Path(journal_path).exists():
+        print(f"\nJournal saved to: {Path(journal_path).resolve()}")
+    else:
+        print("\nNo trades closed -- journal not created.")
     metrics = calculate_metrics(read_journal_rows(journal_path))
     print("\nMetrics summary:")
     print(metrics)
