@@ -96,3 +96,46 @@ revert กลับสถานะเดิมแล้ว ไม่ commit)
 
 **Commit:** `12da84a` — "fix binance config: mask api_key/api_secret with SecretStr to prevent
 repr leaks" (pushed to `origin/master`)
+
+---
+
+## 2026-07-18 — §9 minimum-quantity testnet order test: INCONCLUSIVE (no entry signal)
+
+**สิ่งที่ทำ:** ทำ §9 ตาม `docs/binance_futures_testnet_testing_plan.md` แบบ bounded live-test
+ครบทุกขั้นตอนความปลอดภัยตามแผน — Phase 0 ตรวจ checkpoint สะอาด (working tree clean, `.env`
+ถูก ignore, `allow_live_trading: false`, `testnet: true`, zero positions/orders), Phase 1
+ตรวจ auth/endpoint/market metadata แบบ read-only เท่านั้น (ไม่วาง order ใดๆ), Phase 2 เสนอ diff
+config ชั่วคราวให้ user อนุมัติก่อน, Phase 3 รัน bounded window 45 นาที (`--iterations 90
+--loop-interval 30`) บน Binance Futures **testnet**, Phase 4 revert config ทันทีหลังจบ
+
+ระหว่างคำนวณ quantity ขั้นต่ำที่ผ่านทั้ง `min_qty` และ `min_notional` พบ bug เล็กน้อยในสคริปต์
+ตรวจสอบของตัวเอง — คำนวณด้วย float ธรรมดาได้ `0.0007` ซึ่งจริง ๆ แล้ว notional ต่ำกว่า
+`min_notional` (44.80 < 50) ยังไม่ผ่านเกณฑ์ แก้ด้วย Decimal/tick-exact arithmetic ได้ค่าที่ถูกต้อง
+คือ `0.0008` (notional ≈ 51.19) ก่อนนำไปใช้จริงในการทดสอบ
+
+รันไป 70/90 iterations (~36 นาที) แล้ว process ถูก kill จากภายนอก (ไม่ใช่ exception/crash — ไม่มี
+traceback ท้าย log) แต่ตลอดการรันไม่มี M1 entry signal เกิดขึ้นเลยสักครั้ง (`action=no_trade` ทุก
+iteration, ส่วนใหญ่เพราะ M15/M5 trend ไม่ตรงกันหรือเป็น NONE) — จึงไม่มี order ใดถูกส่งไป exchange
+เลยตลอดการทดสอบ ตรวจสอบ account หลังจบยืนยัน zero positions, zero open orders, balance
+USDT ไม่เปลี่ยนแปลง (5000.0 คงเดิม)
+
+ตามเกณฑ์ที่ user กำหนดไว้ล่วงหน้า ("ถ้าไม่มี entry signal เกิดขึ้นในช่วงเวลาที่กำหนด ให้ถือว่า §9
+เป็น INCONCLUSIVE แล้วหยุดอย่างปลอดภัย") — สรุปผล §9 = **INCONCLUSIVE** (ไม่ใช่ PASS หรือ FAIL
+เพราะไม่มีโอกาสได้ทดสอบ entry/stop-loss/close path จริงเลย)
+
+**เหตุผลที่เลือกวิธีนี้:** ไม่ retry หรือขยายหน้าต่างเวลาเองโดยไม่ถาม user เพราะกฎ safety ระบุชัดว่า
+"no automatic retry, no second trade" และ INCONCLUSIVE ต้อง "stop safely" ทันที ไม่ใช่พยายามอีกรอบ
+ส่วนเรื่อง float bug ในสคริปต์ตรวจสอบ — เลือกแก้และรายงานให้ user เห็นความคลาดเคลื่อนตรง ๆ
+แทนที่จะปิดบัง เพราะถ้าใช้ค่าที่ผิด (`0.0007`) จริงในการเทรดจะทำให้ order ถูก exchange reject
+
+**Config หลังจบ:** revert กลับสถานะเดิมครบ — `allow_live_trading: false`,
+`default_quantity: 0.01`, `daily_max_loss: -30.0`, `max_consecutive_losses: 3`,
+`max_trades_per_day: 150` (ยืนยันด้วย `git diff` ว่างเปล่าทั้ง 2 ไฟล์) ไม่มีการ commit ค่า
+ชั่วคราวใด ๆ เข้า repo
+
+**ผลทดสอบ:** `python -m compileall src tests scripts` ผ่าน, `pytest -q` → **211 passed**
+
+**§10–§16:** ยังไม่เริ่ม เพราะ §9 ไม่ใช่ PASS — ต้องรอ user ตัดสินใจว่าจะลอง §9 ใหม่อีกครั้ง
+(ขยายเวลา/เปลี่ยนช่วงเวลาตลาด) หรือดำเนินการอย่างไรต่อ
+
+**Commit:** ยังไม่ commit — รอ user อนุมัติก่อน (ตามกฎ "wait for approval before commit/push")
